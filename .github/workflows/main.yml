@@ -2,10 +2,10 @@ name: Lokinet Windows Build
 
 on:
   push:
-    branches: [ dev ]          # run when you push to dev
+    branches: [ dev ]
   pull_request:
-    branches: [ dev ]          # run on PRs targeting dev
-  workflow_dispatch:            # allow manual trigger
+    branches: [ dev ]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive   # important! ensures external/ submodules are there
 
       - name: Install cross-compile dependencies
         run: |
@@ -22,13 +24,11 @@ jobs:
             build-essential cmake git pkg-config \
             mingw-w64 nsis automake libtool librsvg2-bin
 
-          # configure gcc/g++ alternatives for mingw
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
-      - name: Build Windows binaries
+      - name: Run official Windows cross-compile script
         run: |
-          git submodule update --init --recursive
           ./contrib/windows.sh
 
       - name: Upload Windows artifacts
