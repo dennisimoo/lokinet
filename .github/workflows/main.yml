@@ -2,44 +2,59 @@ name: Lokinet Windows Build
 
 on:
   push:
-    branches: [ dev ]          # trigger on commits to dev
+    branches: [ dev ]
   pull_request:
-    branches: [ dev ]          # trigger on PRs into dev
-  workflow_dispatch:            # allow manual run
+    branches: [ dev ]
+  workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source (with submodules)
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: recursive     # REQUIRED for external/* and win32 bits
+          submodules: recursive
 
-      - name: Install cross-compile deps
+      - name: Install cross-compile dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake git pkg-config automake libtool \
             mingw-w64 nsis librsvg2-bin
 
-          # MinGW posix toolchain (needed for windres and threads)
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
-      - name: Install Node.js LTS + Yarn (for lokinet-gui build)
+      - name: Install Node.js + Yarn
         run: |
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
           sudo apt-get install -y nodejs
           npm install -g yarn
 
-      - name: Build Windows (official script)
-        env:
-          CI: "1"                    # make scripts behave non-interactively
+      - name: Prepare Windows resources
         run: |
-          set -e
-          ./contrib/windows.sh
+          mkdir -p build/win32
+          cat > build/win32/lokinet-cntrl.rc << 'EOF'
+          #include <windows.h>
+          1 ICON "../win32-setup/lokinet.ico"
+          EOF
+
+      - name: Configure & Build
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+          cmake --build build --config Release -j2
+
+      - name: Package (if supported)
+        run: |
+          cd build
+          cpack || true
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -50,5 +65,4 @@ jobs:
             build/**/*.msi
             build/**/*.zip
             build/**/*.tar.gz
-            build/**/lokinet*.7z
           if-no-files-found: warn
