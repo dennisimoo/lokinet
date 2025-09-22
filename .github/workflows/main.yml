@@ -2,9 +2,10 @@ name: Lokinet CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]          # 👈 triggers when you push to dev
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]          # 👈 triggers when PRs target dev
+  workflow_dispatch:            # 👈 enables "Run workflow" button in Actions UI
 
 jobs:
   build:
@@ -17,6 +18,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v3
 
+      # Linux dependencies
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -26,25 +28,27 @@ jobs:
             libuv1-dev libssl-dev libsodium-dev \
             libzmq3-dev
 
+      # macOS dependencies
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
           brew install cmake pkg-config openssl libsodium zeromq
 
+      # Windows dependencies
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           choco install cmake -y --installargs 'ADD_CMAKE_TO_PATH=System'
           choco install openssl -y
           choco install zeromq -y
-          # libsodium on Windows requires vcpkg
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
           .\vcpkg install libsodium:x64-windows
           echo "VCPKG_ROOT=$PWD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      # Configure builds
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: cmake -B build -S .
@@ -53,13 +57,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
+      # Build
       - name: Build
         run: cmake --build build --config Release -j 2
 
+      # Run tests (skip on Windows)
       - name: Run tests
-        if: matrix.os != 'windows-latest' # disable Windows tests for now
+        if: matrix.os != 'windows-latest'
         run: ctest --test-dir build --output-on-failure
 
+      # Upload binaries
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
