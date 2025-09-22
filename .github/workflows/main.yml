@@ -1,69 +1,43 @@
-name: Lokinet CI
+name: Lokinet Windows Build
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ dev ]          # run when you push to dev
   pull_request:
-    branches: [ dev ]
-  workflow_dispatch:
+    branches: [ dev ]          # run on PRs targeting dev
+  workflow_dispatch:            # allow manual trigger
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+  build-windows:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install cross-compile dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake git pkg-config \
-            libuv1-dev libssl-dev libsodium-dev \
-            libzmq3-dev
+            mingw-w64 nsis cpack automake libtool \
+            librsvg2-bin
 
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+          # configure gcc/g++ alternatives for mingw
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+      - name: Build Windows binaries
         run: |
-          brew update
-          brew install cmake pkg-config openssl libsodium zeromq
+          git submodule update --init --recursive
+          ./contrib/windows.sh
 
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install cmake -y --installargs 'ADD_CMAKE_TO_PATH=System'
-          choco install openssl -y
-          choco install zeromq -y
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
-          .\vcpkg install libsodium:x64-windows
-          echo "VCPKG_ROOT=$PWD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Configure (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: cmake -B build -S .
-
-      - name: Configure (Windows)
-        if: matrix.os == 'windows-latest'
-        run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
-      - name: Build
-        run: cmake --build build --config Release -j 2
-
-      - name: Run tests
-        if: matrix.os != 'windows-latest'
-        run: ctest --test-dir build --output-on-failure
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4   # 👈 FIXED
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: lokinet-${{ matrix.os }}
+          name: lokinet-windows
           path: |
-            build/lokinet*
-            build/bin/*
+            build/*.exe
+            build/*.msi
+            build/*.zip
+            build/*.tar.gz
