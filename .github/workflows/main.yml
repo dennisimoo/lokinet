@@ -2,33 +2,43 @@ name: Lokinet Windows Build
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ dev ]          # trigger on commits to dev
   pull_request:
-    branches: [ dev ]
-  workflow_dispatch:
+    branches: [ dev ]          # trigger on PRs into dev
+  workflow_dispatch:            # allow manual run
 
 jobs:
   build-windows:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout source (with submodules)
         uses: actions/checkout@v4
         with:
-          submodules: recursive   # important! ensures external/ submodules are there
+          submodules: recursive     # REQUIRED for external/* and win32 bits
 
-      - name: Install cross-compile dependencies
+      - name: Install cross-compile deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake git pkg-config \
-            mingw-w64 nsis automake libtool librsvg2-bin
+            build-essential cmake git pkg-config automake libtool \
+            mingw-w64 nsis librsvg2-bin
 
+          # MinGW posix toolchain (needed for windres and threads)
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
-      - name: Run official Windows cross-compile script
+      - name: Install Node.js LTS + Yarn (for lokinet-gui build)
         run: |
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          npm install -g yarn
+
+      - name: Build Windows (official script)
+        env:
+          CI: "1"                    # make scripts behave non-interactively
+        run: |
+          set -e
           ./contrib/windows.sh
 
       - name: Upload Windows artifacts
@@ -36,7 +46,9 @@ jobs:
         with:
           name: lokinet-windows
           path: |
-            build/*.exe
-            build/*.msi
-            build/*.zip
-            build/*.tar.gz
+            build/**/*.exe
+            build/**/*.msi
+            build/**/*.zip
+            build/**/*.tar.gz
+            build/**/lokinet*.7z
+          if-no-files-found: warn
