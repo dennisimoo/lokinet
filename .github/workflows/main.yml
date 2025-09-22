@@ -2,10 +2,10 @@ name: Lokinet CI
 
 on:
   push:
-    branches: [ dev ]          # 👈 triggers when you push to dev
+    branches: [ dev ]
   pull_request:
-    branches: [ dev ]          # 👈 triggers when PRs target dev
-  workflow_dispatch:            # 👈 enables "Run workflow" button in Actions UI
+    branches: [ dev ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,9 +16,8 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Linux dependencies
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -28,14 +27,12 @@ jobs:
             libuv1-dev libssl-dev libsodium-dev \
             libzmq3-dev
 
-      # macOS dependencies
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
           brew install cmake pkg-config openssl libsodium zeromq
 
-      # Windows dependencies
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -48,7 +45,6 @@ jobs:
           .\vcpkg install libsodium:x64-windows
           echo "VCPKG_ROOT=$PWD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # Configure builds
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: cmake -B build -S .
@@ -57,18 +53,15 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-      # Build
       - name: Build
         run: cmake --build build --config Release -j 2
 
-      # Run tests (skip on Windows)
       - name: Run tests
         if: matrix.os != 'windows-latest'
         run: ctest --test-dir build --output-on-failure
 
-      # Upload binaries
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4   # 👈 FIXED
         with:
           name: lokinet-${{ matrix.os }}
           path: |
